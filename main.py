@@ -3,9 +3,10 @@ Pipeline principal — Phase 1 : Infrastructure de données
 =========================================================
 
 Usage :
-    python main.py              # Pipeline complet (download + quality check)
+    python main.py              # Pipeline complet (download + check + indicateurs)
     python main.py --download   # Téléchargement seul
     python main.py --check      # Contrôle qualité seul
+    python main.py --indicators # Calcul des indicateurs seul
     python main.py --summary    # Résumé des données en base
     python main.py --quality    # Rapport des anomalies détectées
 """
@@ -14,6 +15,7 @@ import sys
 from database import init_db, get_data_summary, get_quality_report
 from downloader import download_all
 from cleaner import run_all_quality_checks
+from compute_indicators import compute_all, print_last_values
 
 
 def print_summary():
@@ -75,13 +77,16 @@ def run_pipeline():
     # Étape 3 : Contrôle qualité
     run_all_quality_checks()
 
-    # Étape 4 : Résumé final
+    # Étape 4 : Calcul des indicateurs (Phase 1b)
+    compute_all()
+
+    # Étape 5 : Résumé final
     print_summary()
     print_quality_report()
 
     print("\n" + "=" * 60)
-    print("✅ PHASE 1 TERMINÉE")
-    print("   Prochaine étape : Phase 1b — Calcul des indicateurs (ATR, EMA)")
+    print("✅ PHASE 1 COMPLÈTE (données + indicateurs)")
+    print("   Prochaine étape : Phase 2 — Backtest MA Crossover (Clenow)")
     print("=" * 60)
 
 
@@ -95,8 +100,11 @@ if __name__ == "__main__":
         download_all()
     elif "--check" in args:
         run_all_quality_checks()
+    elif "--indicators" in args:
+        compute_all()
     elif "--summary" in args:
         print_summary()
+        print_last_values()
     elif "--quality" in args:
         print_quality_report()
     else:
