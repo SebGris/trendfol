@@ -368,10 +368,12 @@ def compute_all_indicators(df: pd.DataFrame,
       - atr_pct       : ATR en % du prix
       - ann_vol       : volatilité annualisée (rolling)
       - exp_vol       : volatilité annualisée (exponentielle)
-      - entry_high    : Donchian haut (entrée)
-      - entry_low     : Donchian bas (entrée)
-      - exit_high     : Donchian haut (sortie)
-      - exit_low      : Donchian bas (sortie)
+      - entry_high    : Donchian haut (entrée) — Clenow 100j
+      - entry_low     : Donchian bas (entrée) — Clenow 100j
+      - exit_high     : Donchian haut (sortie) — Clenow 50j
+      - exit_low      : Donchian bas (sortie) — Clenow 50j
+      - turtle_s1_*   : Donchian 20/10j (Turtle System 1)
+      - turtle_s2_*   : Donchian 55/20j (Turtle System 2)
       - ma_position   : signal EMA (+1/-1)
       - ewmac_16_64   : forecast EWMAC Carver (starter)
 
@@ -397,10 +399,23 @@ def compute_all_indicators(df: pd.DataFrame,
     result["ann_vol"] = annualized_volatility(df)
     result["exp_vol"] = exponential_volatility(df)
 
-    # Donchian
+    # Donchian — Clenow (100/50)
     don = donchian(df)
     for col in don.columns:
         result[col] = don[col]
+
+    # Donchian — Turtle S1 (20/10) et S2 (55/20)
+    don_s1 = donchian(df, entry_period=20, exit_period=10)
+    result["turtle_s1_entry_high"] = don_s1["entry_high"]
+    result["turtle_s1_entry_low"] = don_s1["entry_low"]
+    result["turtle_s1_exit_high"] = don_s1["exit_high"]
+    result["turtle_s1_exit_low"] = don_s1["exit_low"]
+
+    don_s2 = donchian(df, entry_period=55, exit_period=20)
+    result["turtle_s2_entry_high"] = don_s2["entry_high"]
+    result["turtle_s2_entry_low"] = don_s2["entry_low"]
+    result["turtle_s2_exit_high"] = don_s2["exit_high"]
+    result["turtle_s2_exit_low"] = don_s2["exit_low"]
 
     # Signaux
     result["ma_position"] = ma_position(df, fast, slow)

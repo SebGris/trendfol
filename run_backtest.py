@@ -3,12 +3,15 @@ Runner de backtest — Phase 2
 ==============================
 
 Usage :
-    python run_backtest.py                      # Stratégie A (MA Crossover) par défaut
+    python run_backtest.py                      # Stratégie C (Core) par défaut
     python run_backtest.py --strategy breakout   # Stratégie B
-    python run_backtest.py --strategy core        # Stratégie C
+    python run_backtest.py --strategy ewmac      # Stratégie D (EWMAC Carver)
+    python run_backtest.py --strategy turtle_s1  # Stratégie E (Turtle S1)
+    python run_backtest.py --strategy turtle_s2  # Stratégie F (Turtle S2)
     python run_backtest.py --capital 200000       # Capital initial personnalisé
     python run_backtest.py --risk-factor 0.001    # Risk factor différent
     python run_backtest.py --all                  # Toutes les stratégies (comparaison)
+    python run_backtest.py --all --fractional --plot  # Comparaison complète + rapports HTML
 
 Exécution : signal jour J → trade à l'ouverture jour J+1
 """
@@ -25,6 +28,7 @@ from indicators import compute_all_indicators
 from backtester import BacktestEngine, CostConfig
 from strategies import STRATEGIES
 from metrics import compute_metrics, format_metrics
+from visualize import generate_report, generate_comparison_report
 
 
 def load_and_prepare_data(universe=None,
@@ -149,8 +153,8 @@ def run_single_backtest(strategy_key: str,
 def run_comparison(data: dict, instruments: dict,
                     initial_capital: float = 100_000,
                     risk_factor: float = RISK_FACTOR,
-                    fractional: bool = False) -> None:
-    """Compare toutes les stratégies côte à côte."""
+                    fractional: bool = False) -> dict:
+    """Compare toutes les stratégies côte à côte. Retourne les résultats."""
     print("\n" + "🏆" * 20)
     print("  COMPARAISON DE TOUTES LES STRATÉGIES")
     mode = "fractionnaire (CFD)" if fractional else "contrats entiers (futures)"
@@ -203,11 +207,14 @@ def run_comparison(data: dict, instruments: dict,
 
     print(f"{'═' * 70}")
 
-    # Référence Clenow
-    print(f"\n  📚 Référence Clenow (Following the Trend, Table 4.4) :")
-    print(f"     Core model : CAGR 15.8%, Sharpe 0.70, MaxDD -39.4%, Vol 25.9%")
-    print(f"     Breakout   : CAGR 14.3%, Sharpe 0.62, MaxDD -47.2%, Vol 27.5%")
-    print(f"     MA Cross   : CAGR 12.7%, Sharpe 0.54, MaxDD -64.7%, Vol 30.9%")
+    # Références
+    print(f"\n  📚 Références historiques :")
+    print(f"     Clenow (Following the Trend, Table 4.4) :")
+    print(f"       Core model : CAGR 15.8%, Sharpe 0.70, MaxDD -39.4%")
+    print(f"       Breakout   : CAGR 14.3%, Sharpe 0.62, MaxDD -47.2%")
+    print(f"       MA Cross   : CAGR 12.7%, Sharpe 0.54, MaxDD -64.7%")
+    print(f"     Carver (Systematic Trading) : EWMAC capture ~85% des perf.")
+    print(f"     Kaufman (TSM) : Turtle S2 > S1 sur longues tendances")
     print(f"\n  ⚠️  Nos résultats diffèrent car :")
     print(f"     - Univers réduit ({len(data)} instruments vs ~70 chez Clenow)")
     print(f"     - Données yfinance (vs données institutionnelles)")
@@ -229,10 +236,12 @@ def run_comparison(data: dict, instruments: dict,
         print(f"     → Relancer avec --fractional pour un backtest significatif :")
         print(f"     python run_backtest.py --all --fractional")
 
+    return results
+
 
 def main():
     parser = argparse.ArgumentParser(description="Backtest Trend Following")
-    parser.add_argument("--strategy", type=str, default="ma_crossover",
+    parser.add_argument("--strategy", type=str, default="core",
                         choices=list(STRATEGIES.keys()),
                         help="Stratégie à tester")
     parser.add_argument("--capital", type=float, default=100_000,
@@ -248,6 +257,8 @@ def main():
                         choices=["starter", "full"],
                         help="Univers d'instruments : "
                              "'starter' (5 Carver) ou 'full' (25 multi-secteurs)")
+    parser.add_argument("--plot", action="store_true",
+                        help="Générer un rapport HTML interactif (reports/)")
     args = parser.parse_args()
 
     # Sélectionner l'univers
@@ -274,13 +285,30 @@ def main():
     instruments = get_instrument_configs()
 
     if args.all:
-        run_comparison(data, instruments, args.capital, args.risk_factor,
+        results = run_comparison(data, instruments, args.capital, args.risk_factor,
                        args.fractional)
+        if args.plot and results:
+            # Rapport individuel pour chaque stratégie
+            for key, res in results.items():
+                path = generate_report(
+                    res["equity_curve"], res["trades"], res["metrics"],
+                    name=res["strategy_info"]["name"],
+                )
+                print(f"  📄 Rapport : {path}")
+            # Rapport comparatif
+            comp_path = generate_comparison_report(results)
+            print(f"  📄 Comparaison : {comp_path}")
     else:
-        run_single_backtest(
+        result = run_single_backtest(
             args.strategy, data, instruments,
             args.capital, args.risk_factor, args.fractional,
         )
+        if args.plot and result:
+            path = generate_report(
+                result["equity_curve"], result["trades"], result["metrics"],
+                name=result["strategy_info"]["name"],
+            )
+            print(f"\n  📄 Rapport HTML : {path}")
 
 
 if __name__ == "__main__":
