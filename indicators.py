@@ -169,6 +169,10 @@ def donchian(df: pd.DataFrame, entry_period: int = 100,
     """
     Canaux de Donchian (Clenow Breakout / Turtles).
 
+    Les canaux sont décalés d'un jour (shift=1) pour éviter le look-ahead :
+    on compare le prix d'aujourd'hui au canal calculé sur les N jours
+    PRÉCÉDENTS (hors aujourd'hui). C'est la convention standard.
+
     Args:
         entry_period: fenêtre pour les bandes d'entrée (défaut: 100j Clenow)
         exit_period: fenêtre pour les bandes de sortie (défaut: 50j Clenow)
@@ -181,10 +185,10 @@ def donchian(df: pd.DataFrame, entry_period: int = 100,
           - exit_low    : plus bas sur exit_period (sortie long)
     """
     return pd.DataFrame({
-        "entry_high": df["High"].rolling(window=entry_period).max(),
-        "entry_low": df["Low"].rolling(window=entry_period).min(),
-        "exit_high": df["High"].rolling(window=exit_period).max(),
-        "exit_low": df["Low"].rolling(window=exit_period).min(),
+        "entry_high": df["High"].rolling(window=entry_period).max().shift(1),
+        "entry_low": df["Low"].rolling(window=entry_period).min().shift(1),
+        "exit_high": df["High"].rolling(window=exit_period).max().shift(1),
+        "exit_low": df["Low"].rolling(window=exit_period).min().shift(1),
     }, index=df.index)
 
 

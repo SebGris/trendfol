@@ -72,5 +72,54 @@ python main.py --quality    # Rapport des anomalies
 
 ## 🔜 Prochaines étapes
 
-- **Phase 1b** : Indicateurs (ATR, EMA 50/100, volatilité annualisée)
-- **Phase 2** : Backtest MA Crossover (stratégie A — Clenow)
+- **Phase 2b** : Visualisation (equity curve, drawdown chart, heatmap mensuelle)
+- **Phase 3** : Stratégie Carver (EWMAC, forecast-based sizing)
+- **Phase 4** : Paper trading IB API
+
+---
+
+## 📈 Phase 2 : Backtest (Stratégies A/B/C — Clenow)
+
+### Nouveaux modules
+
+```
+├── metrics.py           # Métriques : CAGR, Sharpe, Sortino, Calmar, drawdown, etc.
+├── backtester.py        # Moteur de backtest événementiel jour par jour
+├── strategies.py        # Stratégies A (MA Cross), B (Breakout), C (Core)
+└── run_backtest.py      # Runner : exécution et rapport complet
+```
+
+### Lancer un backtest
+
+```bash
+# Stratégie A — MA Crossover (défaut)
+python run_backtest.py
+
+# Stratégie B — Breakout Donchian
+python run_backtest.py --strategy breakout
+
+# Stratégie C — Core Trend-Following
+python run_backtest.py --strategy core
+
+# Comparer les 3 stratégies
+python run_backtest.py --all
+
+# Capital et risk factor personnalisés
+python run_backtest.py --capital 200000 --risk-factor 0.001
+```
+
+### Stratégies implémentées
+
+| Stratégie | Type | Entrée | Sortie | Réf. Clenow |
+|-----------|------|--------|--------|-------------|
+| A: MA Crossover | Always-in-market | EMA50 > EMA100 → Long | EMA50 < EMA100 → Short | Sharpe 0.54, DD -64.7% |
+| B: Breakout | Signal-based | Close ≥ High 100j | Close ≤ Low 50j | Sharpe 0.62, DD -47.2% |
+| C: Core | Combiné | Breakout + MA filter | Low 50j OU MA flip | Sharpe 0.70, DD -39.4% |
+
+### Architecture du moteur
+
+- Signal jour J → Exécution à l'**ouverture de J+1** (anti look-ahead)
+- Position sizing : `Contracts = (Equity × 0.002) / (ATR × PointValue)`
+- Taille constante pendant la durée du trade (Clenow)
+- Coûts : $2.35/contrat (commission + exchange) + 5bps slippage
+- Validation Clenow automatique (red flags si CAGR>30%, Sharpe>2, DD>-10%)
