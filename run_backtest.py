@@ -19,7 +19,7 @@ import argparse
 import pandas as pd
 import numpy as np
 
-from config import UNIVERSE, UNIVERSE_MAP, RISK_FACTOR
+from config import UNIVERSE, UNIVERSE_STARTER, UNIVERSE_MAP, UNIVERSE_BY_SECTOR, RISK_FACTOR
 from database import load_prices
 from indicators import compute_all_indicators
 from backtester import BacktestEngine, CostConfig
@@ -27,22 +27,31 @@ from strategies import STRATEGIES
 from metrics import compute_metrics, format_metrics
 
 
-def load_and_prepare_data(verbose: bool = True) -> dict[str, pd.DataFrame]:
+def load_and_prepare_data(universe=None,
+                          verbose: bool = True) -> dict[str, pd.DataFrame]:
     """
     Charge les données depuis SQLite et calcule les indicateurs.
+
+    Args:
+        universe: liste d'Instrument (défaut: UNIVERSE complet)
 
     Returns:
         {instrument_name: DataFrame avec OHLCV + indicateurs}
     """
+    if universe is None:
+        universe = UNIVERSE
+
     data = {}
-    for inst in UNIVERSE:
+    skipped = []
+    for inst in universe:
         if verbose:
             print(f"  📂 Chargement {inst.name}...", end=" ")
 
         df = load_prices(inst.name)
         if df.empty:
             if verbose:
-                print("⚠️  Vide")
+                print("⚠️  Vide (pas encore téléchargé ?)")
+            skipped.append(inst.name)
             continue
 
         # Calculer les indicateurs
@@ -51,6 +60,10 @@ def load_and_prepare_data(verbose: bool = True) -> dict[str, pd.DataFrame]:
 
         if verbose:
             print(f"✅ {len(enriched)} lignes")
+
+    if skipped and verbose:
+        print(f"\n  ⚠️  {len(skipped)} instruments sans données : {', '.join(skipped)}")
+        print(f"  → Exécuter : python main.py --download")
 
     return data
 
@@ -196,9 +209,19 @@ def run_comparison(data: dict, instruments: dict,
     print(f"     Breakout   : CAGR 14.3%, Sharpe 0.62, MaxDD -47.2%, Vol 27.5%")
     print(f"     MA Cross   : CAGR 12.7%, Sharpe 0.54, MaxDD -64.7%, Vol 30.9%")
     print(f"\n  ⚠️  Nos résultats diffèrent car :")
-    print(f"     - Univers réduit (5 instruments vs ~70 chez Clenow)")
+    print(f"     - Univers réduit ({len(data)} instruments vs ~70 chez Clenow)")
     print(f"     - Données yfinance (vs données institutionnelles)")
     print(f"     - Période différente")
+
+    # Résumé par secteur
+    print(f"\n  📊 RÉPARTITION PAR SECTEUR :")
+    sectors = {}
+    for inst_name in data:
+        inst = UNIVERSE_MAP.get(inst_name)
+        if inst:
+            sectors.setdefault(inst.sector, []).append(inst_name)
+    for sector, names in sorted(sectors.items()):
+        print(f"     {sector:20s} : {len(names)} — {', '.join(names)}")
 
     if not fractional:
         print(f"\n  💡 CONSEIL : Avec ${initial_capital:,.0f}, la plupart des instruments")
@@ -221,17 +244,32 @@ def main():
     parser.add_argument("--fractional", action="store_true",
                         help="Contrats fractionnaires (CFD mode). "
                              "Indispensable si capital < $500k")
+    parser.add_argument("--universe", type=str, default="full",
+                        choices=["starter", "full"],
+                        help="Univers d'instruments : "
+                             "'starter' (5 Carver) ou 'full' (25 multi-secteurs)")
     args = parser.parse_args()
+
+    # Sélectionner l'univers
+    if args.universe == "starter":
+        universe = UNIVERSE_STARTER
+    else:
+        universe = UNIVERSE
 
     # Charger les données
     print(f"\n{'=' * 60}")
-    print(f"📂 CHARGEMENT DES DONNÉES")
+    print(f"📂 CHARGEMENT DES DONNÉES — univers '{args.universe}' ({len(universe)} instruments)")
     print(f"{'=' * 60}")
-    data = load_and_prepare_data()
+    data = load_and_prepare_data(universe)
 
     if not data:
         print("❌ Aucune donnée disponible. Exécuter d'abord python main.py")
         sys.exit(1)
+
+    # Avertir si on a moins d'instruments que prévu
+    if len(data) < len(universe):
+        print(f"\n  ⚠️  {len(data)}/{len(universe)} instruments chargés.")
+        print(f"  → Télécharger les manquants : python main.py --download")
 
     instruments = get_instrument_configs()
 

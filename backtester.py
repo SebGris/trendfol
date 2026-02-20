@@ -128,8 +128,15 @@ class BacktestEngine:
         # Aligner toutes les dates
         all_dates = sorted(set().union(*(df.index for df in data.values())))
 
+        # Pré-calculer les index de dates par instrument (évite O(n²))
+        date_indices = {}
+        for inst_name, df in data.items():
+            idx_list = list(df.index)
+            date_indices[inst_name] = {d: i for i, d in enumerate(idx_list)}
+
         if progress:
-            print(f"  📈 Backtest : {len(all_dates)} jours, "
+            n_total = len(all_dates)
+            print(f"  📈 Backtest : {n_total} jours, "
                   f"{len(data)} instruments, capital initial ${self.initial_capital:,.0f}")
 
         for i, date in enumerate(all_dates):
@@ -157,10 +164,9 @@ class BacktestEngine:
 
                 if signal != current_dir:
                     # Exécution au prix d'ouverture J+1
-                    # On simule ça en utilisant le Close de J comme proxy
-                    # (en vrai, on prendrait l'Open de J+1)
-                    next_idx = list(df.index).index(date)
-                    if next_idx + 1 < len(df.index):
+                    idx_map = date_indices.get(inst_name, {})
+                    next_idx = idx_map.get(date, -1)
+                    if next_idx >= 0 and next_idx + 1 < len(df.index):
                         next_date = df.index[next_idx + 1]
                         exec_price = df.loc[next_date, "Open"]
                         exec_date = next_date
