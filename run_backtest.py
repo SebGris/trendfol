@@ -4,14 +4,14 @@ Runner de backtest — Phase 2
 
 Usage :
     python run_backtest.py                      # Stratégie C (Core) par défaut
-    python run_backtest.py --strategy breakout   # Stratégie B
     python run_backtest.py --strategy ewmac      # Stratégie D (EWMAC Carver)
     python run_backtest.py --strategy turtle_s1  # Stratégie E (Turtle S1)
     python run_backtest.py --strategy turtle_s2  # Stratégie F (Turtle S2)
-    python run_backtest.py --capital 200000       # Capital initial personnalisé
-    python run_backtest.py --risk-factor 0.001    # Risk factor différent
-    python run_backtest.py --all                  # Toutes les stratégies (comparaison)
-    python run_backtest.py --all --fractional --plot  # Comparaison complète + rapports HTML
+    python run_backtest.py --all --fractional --plot  # Comparaison complète + rapports
+
+    # Mode petit capital (Carver, Leveraged Trading) :
+    python run_backtest.py --universe micro --all --plot
+    python run_backtest.py --universe micro --capital 8500 --strategy ewmac --plot
 
 Exécution : signal jour J → trade à l'ouverture jour J+1
 """
@@ -22,7 +22,7 @@ import argparse
 import pandas as pd
 import numpy as np
 
-from config import UNIVERSE, UNIVERSE_STARTER, UNIVERSE_MAP, UNIVERSE_BY_SECTOR, RISK_FACTOR
+from config import UNIVERSE, UNIVERSE_STARTER, UNIVERSE_MICRO, UNIVERSE_MAP, UNIVERSE_BY_SECTOR, RISK_FACTOR, carver_risk_factor
 from database import load_prices
 from indicators import compute_all_indicators
 from backtester import BacktestEngine, CostConfig
@@ -254,9 +254,10 @@ def main():
                         help="Contrats fractionnaires (CFD mode). "
                              "Indispensable si capital < $500k")
     parser.add_argument("--universe", type=str, default="full",
-                        choices=["starter", "full"],
+                        choices=["starter", "full", "micro"],
                         help="Univers d'instruments : "
-                             "'starter' (5 Carver) ou 'full' (25 multi-secteurs)")
+                             "'starter' (5 Carver), 'full' (25 multi-secteurs), "
+                             "'micro' (2 inst. petit capital, Carver Leveraged Trading)")
     parser.add_argument("--plot", action="store_true",
                         help="Générer un rapport HTML interactif (reports/)")
     args = parser.parse_args()
@@ -264,6 +265,21 @@ def main():
     # Sélectionner l'univers
     if args.universe == "starter":
         universe = UNIVERSE_STARTER
+    elif args.universe == "micro":
+        universe = UNIVERSE_MICRO
+        # Mode micro : appliquer les paramètres Carver automatiquement
+        if args.capital == 100_000:  # pas overridé par l'utilisateur
+            args.capital = 8_500     # ~8 000 € → ~$8 500
+        if args.risk_factor == RISK_FACTOR:  # pas overridé
+            args.risk_factor = carver_risk_factor(len(universe))
+        args.fractional = True       # CFD obligatoire avec petit capital
+        print(f"\n  💡 MODE MICRO — Carver Leveraged Trading")
+        print(f"     Capital: ${args.capital:,.0f}")
+        print(f"     Risk factor: {args.risk_factor:.6f} "
+              f"(Carver: instrument target "
+              f"{args.risk_factor * len(universe) * 16:.1f}%)")
+        print(f"     Sizing: fractionnaire (CFD) — automatique")
+        print(f"     Instruments: {', '.join(i.name for i in universe)}")
     else:
         universe = UNIVERSE
 

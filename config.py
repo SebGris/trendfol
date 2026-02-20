@@ -85,6 +85,50 @@ UNIVERSE_STARTER = [i for i in UNIVERSE if i.name in {
     "S&P 500", "Gold", "Corn", "Euro Stoxx 50", "AUDUSD",
 }]
 
+# -----------------------------------------------------------
+# MICRO UNIVERS — Petit capital (€8 000+)
+# -----------------------------------------------------------
+# Basé sur Carver, Leveraged Trading, ch. 4-7 :
+#   - AUDUSD : capital minimum ~$1 500 (spot FX/CFD)
+#   - Gold   : capital minimum ~$2 400 (CFD/spread bet)
+#   - 2 instruments de classes d'actifs différentes
+#     → IDM = 1.2, risk target compte = 13% (Table 44)
+#     → risk target instrument = 1.2 × 13% = 15.6%
+# -----------------------------------------------------------
+UNIVERSE_MICRO = [i for i in UNIVERSE if i.name in {"AUDUSD", "Gold"}]
+
+# Paramètres Carver par taille d'univers (Leveraged Trading, Tables 43-44)
+# clé = nombre d'instruments (classes d'actifs différentes)
+CARVER_PARAMS = {
+    1: {"idm": 1.00, "account_target": 0.12, "instrument_target": 0.120},
+    2: {"idm": 1.20, "account_target": 0.13, "instrument_target": 0.156},
+    3: {"idm": 1.48, "account_target": 0.14, "instrument_target": 0.207},
+    4: {"idm": 1.56, "account_target": 0.17, "instrument_target": 0.265},
+    5: {"idm": 1.70, "account_target": 0.19, "instrument_target": 0.323},
+}
+
+def carver_risk_factor(n_instruments: int) -> float:
+    """
+    Calcule le risk_factor équivalent Clenow à partir du
+    framework Carver (Leveraged Trading).
+
+    La formule Clenow : contracts = (equity × rf) / (ATR × pv)
+    donne un impact journalier par position = equity × rf.
+
+    Pour n positions :
+        vol_annuelle ≈ rf × n × √256  (en simplifiant)
+
+    On veut : vol_annuelle = instrument_target (15.6% pour 2 inst.)
+    Mais chaque instrument ne reçoit que equity/n du capital.
+    Comme le backtester utilise le capital total :
+        rf = instrument_target / (n × √256)
+
+    Réf : Carver, Leveraged Trading, Tables 43-44, ch. 7
+    """
+    import math
+    params = CARVER_PARAMS.get(n_instruments, CARVER_PARAMS[5])
+    return params["instrument_target"] / (n_instruments * math.sqrt(256))
+
 UNIVERSE_BY_SECTOR = {}
 for inst in UNIVERSE:
     UNIVERSE_BY_SECTOR.setdefault(inst.sector, []).append(inst)
